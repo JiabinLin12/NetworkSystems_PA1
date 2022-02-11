@@ -1,6 +1,11 @@
 # Prerequisites
 *.d
-
+._foo1
+._foo2
+._foo3
+._udp_client.c
+._udp_server.c
+.vscode
 # Object files
 *.o
 *.ko
