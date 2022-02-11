@@ -18,19 +18,18 @@
 #define MAX_CMD_LENGHT 10
 #define MAX_FILE_LENGTH 100
 
-#define REWIND_OG 0
 #define ACK 21111112
 typedef struct packet_s {
   int pkt_num;
+  int pkt_len;
   int seq_num;   
   char packet[PACKET_BUFF_SIZE];
   char command[MAX_CMD_LENGHT];
   char file_name[MAX_FILE_LENGTH];
-  int err_msg;
 }packet_t;
 
 void usage(){
-    printf("\nUsage: \n put [file]\n get [file] \n delete [file]\n ls\n exit \n");
+    printf("\n############Usage:############\nput [file]\nget [file]\ndelete [file]\nls\nexit\n#############end##############\n");
 }
 
 /* 
@@ -40,13 +39,15 @@ void error(char *msg) {
     perror(msg);
     exit(0);
 }
-
-
-void sendto_waitforack(void * rc_buf, packet_t * st_buf, int sockfd, uint32_t serverlen, struct sockaddr_in serveraddr){
+/*
+ * send packet and wait for buffer to be received, resend if nothing is received
+ */
+void sendto_then_recv(void * rc_buf, packet_t * st_buf, int sockfd, uint32_t serverlen, struct sockaddr_in serveraddr){
   int rp_num = MAX_REPEAT_TIMES;
   /**buffer is empty then have nothing to sent**/
-  if(st_buf == NULL)
+  if(st_buf == NULL){
     return;
+  }
   /*send the packets*/
   if(sendto(sockfd,st_buf,sizeof(*st_buf),0, (struct sockaddr *)&serveraddr, serverlen)<0){
     error("error in sendto");
@@ -59,125 +60,149 @@ void sendto_waitforack(void * rc_buf, packet_t * st_buf, int sockfd, uint32_t se
     }
     rp_num--;
     printf("send attemp: %d\n", (MAX_REPEAT_TIMES - rp_num));
-  }
+  } 
   if(rp_num<=0){
     error("error: recvfrom connection timeout\n");
   }
-  //printf("0.pkt.packet=%s\npkt.command=%s\npkt.file_name=%s\npkt.seq_num%d\n",(*(packet_t*)rc_buf).packet, (*(packet_t*)rc_buf).command, (*(packet_t*)rc_buf).file_name,(*(packet_t*)rc_buf).seq_num); 
 }
  
-
+// printf("pkt.packet=%s\npkt.command=%s\npkt.file_name=%s\npkt.seq_num%d\n",pkt_rc.packet, pkt_rc.command, pkt_rc.file_name,pkt_rc.seq_num); 
 void handle_commands(packet_t *pkt_st, int sockfd,uint32_t serverlen, struct sockaddr_in serveraddr){
-  struct timeval timeout = {0,800000};  
-  size_t file_size = 0;
-  int seq_num_check = -1;
-  FILE * fd_put, *fd_get;
+  struct timeval timeout = {0,800000}; 
+  int seq_num_check = -1; 
   int n = 0;
+  size_t file_size = 0;
+  FILE * fd_put, *fd_get;
   packet_t pkt_rc;
-  (*pkt_st).err_msg = 0;
-  pkt_rc.err_msg = 0;
   memset(&pkt_rc,0,sizeof(pkt_rc));
-  printf("set rc to 0\n");
   /*set receive timeout from the server*/
   setsockopt(sockfd,SOL_SOCKET,SO_RCVTIMEO,(char*)&timeout,sizeof(struct timeval)); 
-
+  
+  /*put command*/
   if((strcmp((*pkt_st).command,"put")==0) && ((*pkt_st).file_name[0] != '\0')){
     fd_put = fopen((*pkt_st).file_name, "r");
     if(fd_put == NULL)
       error("Error fopen"); 
-     
-    
+
     /*get file size*/
     fseek(fd_put, 0,SEEK_END);
     file_size = ftell(fd_put);  
     fseek(fd_put,0,SEEK_SET);  
+    
     /*get packet number*/ 
-    pkt_st->pkt_num = (file_size / PACKET_BUFF_SIZE) + 1;
+    pkt_st->pkt_num = (file_size / PACKET_BUFF_SIZE);
+    pkt_st->pkt_num = ((file_size%PACKET_BUFF_SIZE) == 0)? pkt_st->pkt_num : pkt_st->pkt_num+1;
+
+    /*add sequence number and send packet and check for ack value*/
     pkt_st->seq_num = ACK;
-    sendto_waitforack(&seq_num_check, pkt_st, sockfd,serverlen, serveraddr);
-    if(seq_num_check != ACK){
-      printf("wrong ack value %d",seq_num_check);
-      return; 
-    }  
-     
-    //send dataput  
+    sendto_then_recv(&seq_num_check, pkt_st, sockfd,serverlen, serveraddr);
+    if(seq_num_check != ACK)
+      error("wrong ack value");
+      
+    //server received command and pkt_num, starting to send content
     for(int i = 0; i < (pkt_st->pkt_num);i++){ 
       (*pkt_st).seq_num = i; 
       memset((*pkt_st).packet,0,sizeof((*pkt_st).packet));
-      
-      fread((*pkt_st).packet, PACKET_BUFF_SIZE, 1, fd_put);
-      sendto_waitforack(&seq_num_check, pkt_st, sockfd,serverlen, serveraddr);
+      (*pkt_st).pkt_len = fread((*pkt_st).packet, 1, PACKET_BUFF_SIZE, fd_put);
+      sendto_then_recv(&seq_num_check, pkt_st, sockfd,serverlen, serveraddr);
       if(seq_num_check != i)
         error("ack value not expected");
       printf("client: finish sending %d/%d packets\n",(*pkt_st).seq_num+1, (*pkt_st).pkt_num);
     }
+
+    /*get command*/  
   }else if (strcmp((*pkt_st).command,"get")==0 && ((*pkt_st).file_name[0] != '\0')){
-      //send get 
-      memset((*pkt_st).packet,0,sizeof((*pkt_st).packet));
+      
       (*pkt_st).seq_num = ACK;
-      sendto_waitforack(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
-      if(pkt_rc.seq_num != ACK){
-        printf("wrong ack value %d",seq_num_check);
-        return; 
+      
+      int rp_num = MAX_REPEAT_TIMES;
+      /*send the packets*/
+      if(sendto(sockfd,pkt_st,sizeof(*pkt_st),0, (struct sockaddr *)&serveraddr, serverlen)<0){
+        error("error in sendto");
       }
-      /*set receive timeout from the server*/
-      for( int i = 0; i < (pkt_rc).pkt_num; i++){
-        n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&serveraddr, &serverlen);
-        if(n < 0){
-          printf("wrong ack value %d",seq_num_check);
-          return; 
+      /*not receiving ack, then try to send it several times untill it fails all*/
+      while ((recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&serveraddr, &serverlen)<0) 
+              && (rp_num > 0)){
+        if(sendto(sockfd,pkt_st,sizeof(*pkt_st),0, (struct sockaddr *)&serveraddr, serverlen)<0){
+          error("error in sendto");
         }
+        rp_num--;
+        printf("send attemp: %d\n", (MAX_REPEAT_TIMES - rp_num));
+      } 
+      if(rp_num<=0){
+        error("error: recvfrom connection timeout\n");
+      }
+      /*recieve from server and check ack value*/
+      if(pkt_rc.seq_num != ACK)
+        error("wrong ack value");
+      
+      /*receive from server*/
+      for( int i = 0; i < (pkt_rc).pkt_num; i++){
+        /*receive packet*/
+        n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&serveraddr, &serverlen);
+        if(n < 0)
+          error("wrong ack value");
+        
+        /*send ack*/
         (*pkt_st).seq_num = i;
         n = sendto(sockfd, &(*pkt_st).seq_num, sizeof((*pkt_st).seq_num), 0, (struct sockaddr *)&serveraddr, serverlen);
-        if (n < 0){ 
+        if (n < 0)
           error("error in sendto");
-          return;
-        }  
+        
+        /*write file*/
         fd_get = fopen((pkt_rc).file_name, "a");
-        if(fd_get == NULL){
+        if(fd_get == NULL)
           error("error in fopen");
-          return; 
-        }
-        n = fwrite((pkt_rc).packet,1,sizeof((pkt_rc).packet), fd_get);
+        
+        n = fwrite((pkt_rc).packet,1, pkt_rc.pkt_len, fd_get);
         printf("client: finish writing %d/%d packets\n",(pkt_rc).seq_num+1, (pkt_rc).pkt_num);
         fclose(fd_get); 
       }
+    /*delete command*/
   }else if(strcmp((*pkt_st).command,"delete")==0 && ((*pkt_st).file_name[0] != '\0')){
-      memset((*pkt_st).packet,0,sizeof((*pkt_st).packet));
+      /*send packet with command and ack*/
       (*pkt_st).seq_num = 0;
-      sendto_waitforack(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
+      sendto_then_recv(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
       if(pkt_rc.seq_num < 0){
         printf("file does not exist\n");
       }else{
         printf("%s removed succesfully\n",(*pkt_st).file_name);
       }
-      
+    
+    /*ls command*/
   }else if (strcmp((*pkt_st).command,"ls")==0){
-      memset((*pkt_st).packet,0,sizeof((*pkt_st).packet));
+      /*send command with ack number*/
       (*pkt_st).seq_num = 0;
-      sendto_waitforack(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
+      sendto_then_recv(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
       if(pkt_rc.seq_num != 0)
-        return; 
-      
+        error("error in ack value");
+        
+      /*receive list from server*/
       n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&serveraddr, &serverlen);
-      if(n < 0){
+      if(n < 0)
         error("error in recvfrom");
-      } 
+      
       (*pkt_st).seq_num = pkt_rc.seq_num;
       n = sendto(sockfd, &(*pkt_st).seq_num, sizeof((*pkt_st).seq_num), 0, (struct sockaddr *)&serveraddr, serverlen);
       if (n < 0)
         error("error in sendto");
       
+      printf("\n**************ls**************\n");
       printf("%s",pkt_rc.packet);
+    
+    /*exit*/
   }else if (strcmp((*pkt_st).command,"exit")==0){
+      /*send command with ack number*/
       (*pkt_st).seq_num = ACK;
-      sendto_waitforack(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
+      sendto_then_recv(&pkt_rc.seq_num, pkt_st, sockfd,serverlen, serveraddr);
       if(pkt_rc.seq_num != ACK)
-        error("error in sendto_waitforack");
+        error("error in sendto_then_recv");
       
       printf("client: server exited\n");
+    
+    /*echo other commands*/
   }else{
-    sendto_waitforack(&pkt_rc.command, pkt_st, sockfd,serverlen, serveraddr);
+    sendto_then_recv(&pkt_rc.command, pkt_st, sockfd,serverlen, serveraddr);
     printf("command was not understood: %s\n", pkt_rc.command);
   }    
 }
@@ -220,9 +245,7 @@ int main(int argc, char **argv) {
     bcopy((char *)server->h_addr, 
 	  (char *)&serveraddr.sin_addr.s_addr, server->h_length);
     serveraddr.sin_port = htons(portno);
-#if (REWIND_OG == 0)
-  while(1){
-    memset(&pkt,0,sizeof(pkt));
+  while(1){    
     /* get a message from the user */  
     bzero(argopt, ARG_MAX_SIZE);
     usage(); 
@@ -242,23 +265,9 @@ int main(int argc, char **argv) {
       pkt.file_name[0] = '\0'; 
 
     serverlen = sizeof(serveraddr); 
+
     /*Handle command*/
     handle_commands(&pkt,sockfd, serverlen, serveraddr);
-  }  
-    return 0; 
-#else  
-    /* send the message to the server */
-    serverlen = sizeof(serveraddr);
-    n = sendto(sockfd, argopt, strlen(argopt), 0, &serveraddr, serverlen);
-    if (n < 0) 
-      error("ERROR in sendto");
-    
-    /* print the server's reply */
-    n = recvfrom(sockfd, argopt, strlen(argopt), 0, &serveraddr, &serverlen);
-    if (n < 0) 
-      error("ERROR in recvfrom");
-    printf("Echo from server: %s", argopt);
-    return 0;
-#endif
+  } 
 }
 
