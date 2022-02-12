@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -g -Wall -Werror
 
-all: client server
+all: touchclient touchserver client server
 
 client: client/udp_client.c
 	$(CC) $(CFLAGS) client/udp_client.c -o client/udp_client
@@ -16,6 +16,10 @@ cleanclient:
 	rm client/udp_client
 cleanserver:
 	rm server/udp_server
+touchclient:
+	touch client/udp_client.c
+touchserver:
+	touch server/udp_server.c
 clean:
 	rm server/udp_server client/udp_client
 
