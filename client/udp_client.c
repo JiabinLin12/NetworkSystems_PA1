@@ -71,6 +71,7 @@ void handle_commands(packet_t *pkt_st, int sockfd,uint32_t serverlen, struct soc
   struct timeval timeout = {0,800000}; 
   int seq_num_check = -1; 
   int n = 0;
+  int i;
   size_t file_size = 0;
   FILE * fd_put, *fd_get;
   packet_t pkt_rc;
@@ -100,7 +101,7 @@ void handle_commands(packet_t *pkt_st, int sockfd,uint32_t serverlen, struct soc
       error("wrong ack value");
       
     //server received command and pkt_num, starting to send content
-    for(int i = 0; i < (pkt_st->pkt_num);i++){ 
+    for(i = 0; i < (pkt_st->pkt_num);i++){ 
       (*pkt_st).seq_num = i; 
       memset((*pkt_st).packet,0,sizeof((*pkt_st).packet));
       (*pkt_st).pkt_len = fread((*pkt_st).packet, 1, PACKET_BUFF_SIZE, fd_put);
@@ -137,7 +138,7 @@ void handle_commands(packet_t *pkt_st, int sockfd,uint32_t serverlen, struct soc
         error("wrong ack value");
       
       /*receive from server*/
-      for( int i = 0; i < (pkt_rc).pkt_num; i++){
+      for( i = 0; i < (pkt_rc).pkt_num; i++){
         /*receive packet*/
         n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&serveraddr, &serverlen);
         if(n < 0)
@@ -149,20 +150,22 @@ void handle_commands(packet_t *pkt_st, int sockfd,uint32_t serverlen, struct soc
         if (n < 0)
           error("error in sendto");
         
-        /*write file*/
-        fd_get = fopen((pkt_rc).file_name, "a");
-        if(fd_get == NULL)
-          error("error in fopen");
+        if(i==0){
+          /*open file*/
+          fd_get = fopen((pkt_rc).file_name, "w");
+          if(fd_get == NULL)
+            error("error in fopen");
+        }
         
         n = fwrite((pkt_rc).packet,1, pkt_rc.pkt_len, fd_get);
         printf("client: finish writing %d/%d packets\n",(pkt_rc).seq_num+1, (pkt_rc).pkt_num);
-        fclose(fd_get); 
       }
+      fclose(fd_get); 
     /*delete command*/
   }else if(strcmp((*pkt_st).command,"delete")==0 && ((*pkt_st).file_name[0] != '\0')){
       /*send packet with command and ack*/
       (*pkt_st).seq_num = 0;
-      sendto_then_recv(&pkt_rc, pkt_st, sockfd,serverlen, serveraddr);
+      sendto_then_recv(&pkt_rc.seq_num, pkt_st, sockfd,serverlen, serveraddr);
       if(pkt_rc.seq_num < 0){
         printf("file does not exist\n");
       }else{

@@ -94,7 +94,7 @@ void handle_commands(int sockfd,uint32_t clientlen, struct sockaddr_in clientadd
     /*put command*/
   if((strncmp(pkt_rc.command, "put", sizeof("put"))==0) && (pkt_rc.file_name[0] != '\0')){
     /*open a file*/
-    fd_put = fopen(pkt_rc.file_name, "ab");
+    fd_put = fopen(pkt_rc.file_name, "w");
     if(fd_put == NULL) 
       error("error opening file");
     
@@ -168,7 +168,7 @@ void handle_commands(int sockfd,uint32_t clientlen, struct sockaddr_in clientadd
       n = remove(pkt_rc.file_name);
       /*seq number would be negative if it fails. Check on the other side*/
       pkt_st.seq_num = pkt_rc.seq_num+n;
-      n = sendto(sockfd, &pkt_st, sizeof(pkt_st), 0, (struct sockaddr *) &clientaddr, clientlen);
+      n = sendto(sockfd, &pkt_st.seq_num, sizeof(pkt_st.seq_num), 0, (struct sockaddr *) &clientaddr, clientlen);
       if (n < 0) 
         error("error in sendto");
     /*ls command*/
