@@ -106,6 +106,7 @@ void handle_commands(int sockfd,uint32_t clientlen, struct sockaddr_in clientadd
       error("error in sendto");
     /*write file down to server machine*/
     for(j = 0; j < pkt_rc.pkt_num; j++){
+      usleep(100);
       /*receive file content from client*/
       n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&clientaddr, &clientlen);
       if(n == -1)

@@ -139,6 +139,7 @@ void handle_commands(packet_t *pkt_st, int sockfd,uint32_t serverlen, struct soc
       
       /*receive from server*/
       for( i = 0; i < (pkt_rc).pkt_num; i++){
+        usleep(100);
         /*receive packet*/
         n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&serveraddr, &serverlen);
         if(n < 0)
