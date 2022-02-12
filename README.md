@@ -2,11 +2,11 @@
 
 This is the code for Network Systems PA1
 * This program handles commad: [put],[get],[delete],[ls],[exit] through UDP
-  * put is to transfer file and write it from client to server
-  * get is to transfer file and write it from server to client
-  * delete is to delete file from server
-  * ls list all the files in server directory
-  * exit exits the server proecess gracefully 
+  * [put] is to transfer file and write it from client to server
+  * [get] is to transfer file and write it from server to client
+  * [delete] is to delete file from server
+  * [ls] list all the files in server directory
+  * [exit] exits the server proecess gracefully 
 * UDP realiable transfer  
   * adding sequence number 
   * retransfer the packet up to 5 times if the packet is lost. 
