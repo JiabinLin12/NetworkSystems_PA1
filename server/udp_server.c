@@ -81,6 +81,7 @@ void handle_commands(int sockfd,uint32_t clientlen, struct sockaddr_in clientadd
   DIR *cur_dir;
   struct dirent *list;
   int pkt_offset; 
+  int j,i;
   memset(&pkt_st,0,sizeof(pkt_st));
   memset(&pkt_rc,0,sizeof(pkt_rc));
   /*waiting packet from client*/
@@ -104,7 +105,7 @@ void handle_commands(int sockfd,uint32_t clientlen, struct sockaddr_in clientadd
     if (n < 0)  
       error("error in sendto");
     /*write file down to server machine*/
-    for(int j = 0; j < pkt_rc.pkt_num; j++){
+    for(j = 0; j < pkt_rc.pkt_num; j++){
       /*receive file content from client*/
       n = recvfrom(sockfd, &pkt_rc, sizeof(pkt_rc), 0, (struct sockaddr *)&clientaddr, &clientlen);
       if(n == -1)
@@ -148,7 +149,7 @@ void handle_commands(int sockfd,uint32_t clientlen, struct sockaddr_in clientadd
       
       strcpy(pkt_st.file_name, pkt_rc.file_name);
       /*sending packet*/  
-      for (int i = 0; i < pkt_st.pkt_num;i++){
+      for (i = 0; i < pkt_st.pkt_num;i++){
         /*padding packet with sequence number, packet length and file content*/
         pkt_st.seq_num = i; 
         pkt_st.pkt_len = fread(pkt_st.packet,1,PACKET_BUFF_SIZE, fd_get);
