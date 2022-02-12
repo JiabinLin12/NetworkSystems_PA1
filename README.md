@@ -1,7 +1,7 @@
 # NetworkSystems_PA1
 
 This is the code for Network Systems PA1
-* This program handles commad: [put],[get],[delete],[ls],[exit] through UDP
+* This program handles commads: [put],[get],[delete],[ls],[exit] through UDP
   * [put] is to transfer file and write it from client to server
   * [get] is to transfer file and write it from server to client
   * [delete] is to delete file from server
@@ -19,14 +19,14 @@ Instruction to run the program:
 * clone this directory 
 * cd NetworkSystems_PA1
 * For client
-* * run [make]
-* * run [cd client]
-* * run [./udp_client <ip> <port>]
-* * Interface should prompt user with its usage
-* For server
-* * run [make]
-* * run [cd server]
-* * run [./udp_server <port>]
+  * run [make]
+  * run [cd client]
+  * run [./udp_client <ip> <port>]
+  * Interface should prompt user with its usage
+*  For server
+   * run [make]
+   * run [cd server]
+   * run [./udp_server <port>]
 
   
 
